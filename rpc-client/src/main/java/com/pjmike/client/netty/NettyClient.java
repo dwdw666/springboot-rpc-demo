@@ -35,7 +35,7 @@ public class NettyClient {
         this.host = host;
         this.port = port;
     }
-    public void connect() {
+    public void connect() throws InterruptedException {
         clientHandler = new ClientHandler();
         eventLoopGroup = new NioEventLoopGroup();
         //启动类
@@ -57,8 +57,6 @@ public class NettyClient {
                     }
                 });
         connect(bootstrap, host, port, MAX_RETRY);
-//        ChannelFuture future = bootstrap.connect(host, port).sync();
-//        channel = future.channel();
     }
 
     /**
@@ -69,7 +67,7 @@ public class NettyClient {
      * @param port
      * @param retry
      */
-    private void connect(Bootstrap bootstrap, String host, int port, int retry) {
+    private void connect(Bootstrap bootstrap, String host, int port, int retry) throws InterruptedException {
         ChannelFuture channelFuture = bootstrap.connect(host, port).addListener(future -> {
             if (future.isSuccess()) {
                 log.info("连接服务端成功");
@@ -81,9 +79,15 @@ public class NettyClient {
                 //本次重连的间隔
                 int delay = 1 << order;
                 log.error("{} : 连接失败，第 {} 重连....", new Date(), order);
-                bootstrap.config().group().schedule(() -> connect(bootstrap, host, port, retry - 1), delay, TimeUnit.SECONDS);
+                bootstrap.config().group().schedule(() -> {
+                    try {
+                        connect(bootstrap, host, port, retry - 1);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }, delay, TimeUnit.SECONDS);
             }
-        });
+        }).sync();
         channel = channelFuture.channel();
     }
 
